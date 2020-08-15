@@ -20,7 +20,6 @@ import datetime
 from datetime import timedelta
 from datetime import datetime
 from requests_oauthlib import OAuth2Session
-from oauthlib.oauth2 import TokenExpiredError
 import csv
 import subprocess
 import time
@@ -30,13 +29,6 @@ apiVersion = '49.0'
 
 
 class ApexLogMonitor():
-
-    _limitsToCheck = [
-        'DailyApiRequests',
-        'DailyAsyncApexExecutions',
-        'DailyBulkApiRequests',
-        'DailyStreamingApiEvents'
-    ]
 
     def __init__(self, targetusername, debugusername, logdir, datadir):
         self.limitThreshold = .50
@@ -78,76 +70,114 @@ class ApexLogMonitor():
         return OAuth2Session(self._auth['clientId'], token=self._token)
 
     def startDebugLog(self):
+        debugLevelName = 'SFDXDebugLevel17'
+        # query for debug trace flag
         query = f"SELECT Id, ApexCode, ApexProfiling, Callout, Database, DebugLevel.DeveloperName, ExpirationDate, StartDate, System, TracedEntity.UserName, Validation, Visualforce, Workflow, LogType FROM TraceFlag WHERE TracedEntity.UserName='{self.debugusername}'"
         url = f"{self._auth['instanceUrl']}/services/data/v{apiVersion}/tooling/query/?q={quote_plus(query)}"
 
         debugQueryResult = json.loads(self._client.request('GET', url).text)
-
         dateformat = '%Y-%m-%dT%H:%M:%S.%f%z'
         traceDebugId = ''
+        # check for both the user debug log type and debug level
+        # there can only be 1 USER_DEBUG active at a time
         for result in debugQueryResult['records']:
-            if result['DebugLevel']['DeveloperName'] == 'SFDXDebugLevel':
-                traceDebugId = result['Id']
-                ts = int(datetime.strptime(
+            ts = int(datetime.strptime(
                     result['ExpirationDate'], dateformat).timestamp())
-                if (int(datetime.now().timestamp()) - ts) < 900:
-                    print(
-                        f"Debug TraceFlag has expiry > 15min not resetting for {self.debugusername}")
-                    return
-
+            if result['LogType'] == 'USER_DEBUG' and (int(datetime.now().timestamp()) - ts) < 900:
+                print(f"TraceFlag for DebugLevel: {result['DebugLevel']['DeveloperName']}) detected expiry > 15min not resetting for {self.debugusername}")
+                return
+            if result['DebugLevel']['DeveloperName'] == debugLevelName:
+                traceDebugId = result['Id']
+                
+        
         dateformat = '%Y-%m-%dT%H:%M:%S.%f%z'
-        expiryDate = (datetime.utcnow() + timedelta(minutes=30)
-                      ).strftime(dateformat)
+        expiryDate = (datetime.utcnow() + timedelta(minutes=30)).strftime(dateformat)
 
-        url = f"{self._auth['instanceUrl']}/services/data/v{apiVersion}/tooling/sobjects/TraceFlag"
+        # no traceflag check if debug level is defined 
+        if not traceDebugId:
+          print(f"No TraceDebugId found. Checking for DebugLevel: {debugLevelName}...")
 
-        body = ''
-        if traceDebugId:
-            body = {'ExpirationDate': f"{expiryDate}"}
-            url += f"/{traceDebugId}"
-        else:
-            userQuery = f"SELECT Id FROM User WHERE username='{self.debugusername}'"
-            userQueryUrl = f"{self._auth['instanceUrl']}/services/data/v{apiVersion}/query?q={quote_plus(userQuery)}"
-            userQueryResult = json.loads(self._client.request('GET', userQueryUrl).text)
-            
-            tracedEntityId = ''
-            for result in userQueryResult['records']:
-                tracedEntityId = result['Id']
+          queryDebugLevel = f"SELECT Id FROM DebugLevel WHERE DeveloperName = '{debugLevelName}'"
+          queryDebugLevelUrl = f"{self._auth['instanceUrl']}/services/data/v{apiVersion}/tooling/query/?q={quote_plus(queryDebugLevel)}"
+          queryDebugLevelResult = json.loads(self._client.request('GET', queryDebugLevelUrl).text)
 
-            debugQueryResult = json.loads(self._client.request('GET', url).text) 
+          print(queryDebugLevelResult)
+          if queryDebugLevelResult['totalSize'] > 0:
+            print(f"Found debug level..")
+            debugLevelId = queryDebugLevelResult['records'][0]['Id']
+          else:
+            print(f"DebugLevel: {queryDebugLevel} not found. Creating...")
             body = {
-              'ExpirationDate': f"{expiryDate}",
-              'ApexCode': 'FINEST',
-              'ApexProfiling': 'FINEST',
-              'Callout': 'FINEST',
-              'Database': 'FINEST',
-              'DebugLevelId': '7dl1W000000KzQe',
-              'System': 'FINE',
-              'TracedEntityId': tracedEntityId,
-              'Validation': 'INFO',
-              'Visualforce': 'FINER',
-              'Workflow': 'FINER',
-              'LogType': 'USER_DEBUG'
+                'ApexCode' : 'FINEST',
+                'ApexProfiling': 'FINEST',
+                'Callout': 'FINEST',
+                'Database': 'FINEST',
+                'System': 'FINEST',
+                'MasterLabel': debugLevelName,
+                'DeveloperName': debugLevelName,
+                'Validation': 'FINEST',
+                'Visualforce': 'FINEST',
+                'Workflow': 'FINEST'
             }
+            debugLevelUrl = f"{self._auth['instanceUrl']}/services/data/v{apiVersion}/tooling/sobjects/DebugLevel"
+            debugLevelResult = json.loads(self._client.request('POST', debugLevelUrl, json=body, headers={
+                                            'Content-Type': 'application/json'}).text)
 
-            print(body)
-            response = self._client.request('POST', url, json=body, headers={
-                                        'Content-Type': 'application/json'})
-
-            if response.status_code == '200':
-              print(f"Debug TraceFlag set for {self.debugusername}")
+            if debugLevelResult['success'] == True:
+                print(f"Successfully created {debugLevelName} ({debugLevelResult})...")
+                debugLevelId = debugLevelResult['id']
             else:
-              print(
-                f"Error unable to setup Debug TraceFlag for {self.debugusername}. Error: {response.text} Body: {body}")
+                print(f"Error unable to create {debugLevelName}. Error: {debugLevelResult} Body: {body}")
+                sys.exit()
 
+          debugQueryResult = json.loads(self._client.request('GET', url).text)
+          userQuery = f"SELECT Id FROM User WHERE username='{self.debugusername}'"
+          userQueryUrl = f"{self._auth['instanceUrl']}/services/data/v{apiVersion}/query?q={quote_plus(userQuery)}"
+          userQueryResult = json.loads(self._client.request('GET', userQueryUrl).text)
+            
+          tracedEntityId = ''
+          for result in userQueryResult['records']:
+            tracedEntityId = result['Id']
+
+          body = {
+            'ExpirationDate': f"{expiryDate}",
+            'ApexCode': 'FINEST',
+            'ApexProfiling': 'FINEST',
+            'Callout': 'FINEST',
+            'Database': 'FINEST',
+            'DebugLevelId': debugLevelId,
+            'System': 'FINE',
+            'TracedEntityId': tracedEntityId,
+            'Validation': 'INFO',
+            'Visualforce': 'FINER',
+            'Workflow': 'FINER',
+            'LogType': 'USER_DEBUG'
+          }
+
+        traceDebugUrl = f"{self._auth['instanceUrl']}/services/data/v{apiVersion}/tooling/sobjects/TraceFlag"
+        if traceDebugId:
+          print(f"TraceDebugId defined setting body to expiration date only.")
+          body = {'ExpirationDate': f"{expiryDate}"}
+          traceDebugUrl += f"/{traceDebugId}"
+
+        print(f"url: {traceDebugUrl}")
+        traceDebugResult = json.loads(self._client.request('POST', traceDebugUrl, json=body, headers={
+                                          'Content-Type': 'application/json'}).text)
+        if 'success' in traceDebugResult:
+          print(f"Debug TraceFlag set for {self.debugusername}. exiting...")
+          sys.exit()
+        else:
+          print(f"Error unable to setup Debug TraceFlag for {self.debugusername}. Error: {traceDebugResult} Body: {body}")
+              
     def retrieve(self):
-
+        print(f"Retrieving logs for {self.debugusername}...")
         query = f"SELECT Application,DurationMilliseconds,Id,LastModifiedDate,Location,LogLength,LogUserId,Operation,Request,StartTime,Status,SystemModstamp FROM ApexLog WHERE LogUser.UserName = '{self.debugusername}' ORDER BY LastModifiedDate DESC"
         url = f"{self._auth['instanceUrl']}/services/data/v{apiVersion}/tooling/query/?q={quote_plus(query)}"
 
         apexLogQueryResult = json.loads(self._client.request('GET', url).text)
 
-        if 'records' in apexLogQueryResult:
+        if apexLogQueryResult['totalSize'] > 0:
+            print(f"Found {apexLogQueryResult['records']['totalSize']} logs")
             for result in apexLogQueryResult['records']:
                 format = '%Y-%m-%dT%H:%M:%S.%f%z'
                 d = datetime.strptime(
@@ -167,8 +197,7 @@ class ApexLogMonitor():
 
                 self.apexLogIds.append(result['Id'])
         else:
-            raise LogError(
-                f"Error No Results Returned. Result: {apexLogQueryResult}")
+            print(f"No logs found.")
 
     def getApexLog(self, id):
 
@@ -271,9 +300,9 @@ def main(argv):
 
     apm = ApexLogMonitor(targetusername, debugusername, logdir, datadir)
 
-    #apm.startDebugLog()
+    apm.startDebugLog()
     apm.retrieve()
-    apm.delete()
+    #apm.delete()
     #apm.compressLogs()
 
 
