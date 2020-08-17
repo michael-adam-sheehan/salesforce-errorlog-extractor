@@ -5,7 +5,7 @@ import sys, subprocess, os, getopt
 mswindows = (sys.platform == "win32")
 
 def usage():
-  print("errorlog-extraction.py -u <targetusername> -d <debugusername>")
+  print("errorlog-extraction.py [--no-traceflag --delete-logs] -u <targetusername> -d <debugusername>")
 
 def main(argv):
 
@@ -14,13 +14,17 @@ def main(argv):
       sys.exit()
 
     try:
-      opts, args = getopt.getopt(sys.argv[1:],"u:d:h",["targetusername=", "debugusername="])
-    except getopt.GetoptError:
-      print('errorlog-extraction.py -u <targetusername> -d <debugusername>')
+      opts, args = getopt.getopt(sys.argv[1:],'u:d:h',['targetusername=', 'debugusername=', 'no-traceflag', 'delete-logs', 'verbose'])
+    except getopt.GetoptError as err:
+      print("Error: {0}".format(err))
+      usage()
       sys.exit(2)
 
     targetusername = None
     debugusername = None
+    setTraceFlag = True
+    deleteLogs = False
+    verbose = False
 
     for opt, arg in opts:
       if opt == '-h':
@@ -30,6 +34,12 @@ def main(argv):
         targetusername = arg
       elif opt in ("-d", "--debugusername"):
         debugusername = arg
+      elif opt == '--no-traceflag':
+        setTraceFlag = False
+      elif opt == '--delete-logs':
+        deleteLogs = True
+      elif opt == '--verbose':
+        verbose = True 
 
     if not targetusername:
       print('Please supply a targetusername for logging into sfdc org')
@@ -46,11 +56,19 @@ def main(argv):
     backupdir = f"{os.getcwd()}/backup"
     os.makedirs(backupdir, exist_ok=True)
 
-    ele = SFDCErrorLogExtractor(targetusername, debugusername, logdir, backupdir)
+    ele = SFDCErrorLogExtractor(targetusername, debugusername, logdir, backupdir, verbose)
 
-    ele.startDebugLog()
+    if setTraceFlag:
+        ele.startDebugLog()
+    else:
+        print(f"debug trace flag disabled...")
+
     ele.retrieve()
-    ele.delete()
+
+    if deleteLogs:
+        print(f"Deleting logs for username: {debugusername}")
+        ele.delete()
+        
     #ele.compressLogs()
 
 if __name__ == "__main__":
