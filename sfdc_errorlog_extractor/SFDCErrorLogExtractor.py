@@ -17,42 +17,53 @@ apiVersion = '49.0'
 
 class SFDCErrorLogExtractor():
 
-    def __init__(self, targetusername, debugusername, logdir, backupdir):
+    def __init__(self, targetusername, debugusername, logdir, backupdir, verbose):
+        self.verbose = verbose
         self.targetusername = targetusername
         self.debugusername = debugusername
         try:
             self._auth = self._getAuth()
             self._token = self._getToken()
             self._client = self._getClient()
-        except:
-            e = sys.exc_info()[0]
-            raise AuthFailed(e)
+        except Exception as e:
+            print(e)
+            sys.exit()
+
         self._logdir = logdir
         self._backupdir = backupdir
         self.apexLogIds = []
-
     #
     # SFDX Token contains following fields: username, id, connectedStatus, instanceUrl, clientId
     #
     def _getAuth(self):
         sfdxCmd = f"sfdx force:org:display --targetusername={self.targetusername} --json"
-        try:
-            p = subprocess.Popen(sfdxCmd, shell=True,
-                                 stdout=subprocess.PIPE, encoding='utf-8')
-            result = p.communicate()[0].strip()
-            p.stdout.close()
-            return json.loads(result)['result']
-        except:
-            e = sys.exc_info()[0]
-            print(f"SFDX Auth retrieval failed: {e}")
+        auth = {}
+        p = subprocess.Popen(sfdxCmd, shell=True,
+                                stdout=subprocess.PIPE, encoding='utf-8')
+        response = json.loads(p.communicate()[0])
+        p.stdout.close()
+        if 'result' not in response:
+            raise AuthFailed(f"Error no result found in response. Response: {response}")
+        auth = response['result']
+        if self.verbose:
+            print(f"setting auth = {auth}")
+
+        return auth
 
     def _getToken(self):
+
+        if 'accessToken' not in self._auth:
+            raise AuthFailed(f"Error no accesstoken found. auth:{self._auth}")
+
         return {
             'token_type': 'Bearer',
             'access_token': self._auth['accessToken']
         }
 
     def _getClient(self):
+        if 'clientId'  not in self._auth:
+            raise AuthFailed(f"Error no clientId found. auth:{self._auth}")
+
         return OAuth2Session(self._auth['clientId'], token=self._token)
 
     def startDebugLog(self):
@@ -74,7 +85,6 @@ class SFDCErrorLogExtractor():
             if result['DebugLevel']['DeveloperName'] == debugLevelName:
                 traceDebugId = result['Id']
                 
-        
         expiryDate = (datetime.utcnow() + timedelta(minutes=30)).strftime(dateformat)
         startDate = (datetime.utcnow()).strftime(dateformat)
         # no traceflag check if debug level is defined 
@@ -116,7 +126,7 @@ class SFDCErrorLogExtractor():
           debugQueryResult = self._client.request('GET', url).json()
           userQuery = f"SELECT Id FROM User WHERE username='{self.debugusername}'"
           userQueryUrl = f"{self._auth['instanceUrl']}/services/data/v{apiVersion}/query?q={quote_plus(userQuery)}"
-          userQueryResult = json.loads(self._client.request('GET', userQueryUrl).text)
+          userQueryResult = self._client.request('GET', userQueryUrl).json()
           tracedEntityId = ''
           for result in userQueryResult['records']:
             tracedEntityId = result['Id']
@@ -144,7 +154,7 @@ class SFDCErrorLogExtractor():
           traceDebugUrl += f"/{traceDebugId}"
 
         traceDebugResult = self._client.request('PATCH', traceDebugUrl, json=body, headers={
-            'Content-Type': 'application/json'}).json
+            'Content-Type': 'application/json'}).json()
 
         if 'success' in traceDebugResult:
           print(f"Debug TraceFlag set for {self.debugusername}. exiting...")
@@ -157,7 +167,7 @@ class SFDCErrorLogExtractor():
         query = f"SELECT Application,DurationMilliseconds,Id,LastModifiedDate,Location,LogLength,LogUserId,Operation,Request,StartTime,Status,SystemModstamp FROM ApexLog WHERE LogUser.UserName = '{self.debugusername}' ORDER BY LastModifiedDate DESC"
         url = f"{self._auth['instanceUrl']}/services/data/v{apiVersion}/tooling/query/?q={quote_plus(query)}"
 
-        apexLogQueryResult = json.loads(self._client.request('GET', url).text)
+        apexLogQueryResult = self._client.request('GET', url).json()
 
         if apexLogQueryResult['totalSize'] > 0:
             print(f"Found {apexLogQueryResult['records']['totalSize']} logs")
@@ -237,12 +247,10 @@ class SFDCErrorLogExtractor():
         p2.stdout.close()
         print(f"Delete output: {delResult}")
 
-
 class LogError(Exception):
     def __init__(self, message):
         super(LogError, self).__init__(message)
 
-
-class AuthFailed(Exception):
+class AuthFailed(BaseException):
     def __init__(self, message):
         super(AuthFailed, self).__init__(message)
