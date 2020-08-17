@@ -30,5 +30,7 @@ setup(
 
     keywords='salesforce sfdx error-logs',
     packages=find_packages(exclude=['tests']),
-    install_requires=['chardet>=3.0.4', 'idna>=2.10', 'oauthlib>=3.1.0', 'pytz>=2020.1', 'requests>=2.24.0', 'requests-oauthlib>=1.3.0', 'urllib3>=1.25.10'],
+    install_requires=['chardet>=3.0.4', 'idna>=2.10', 'oauthlib>=3.1.0', 'pytz>=2020.1', 'requests>=2.24.0', 'requests-oauthlib>=1.3.0', 'urllib3>=1.25.10', 'responses>=0.10.16'],
+    setup_requires=['pytest-runner'],
+    tests_require=['pytest']
 )
