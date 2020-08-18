@@ -5,7 +5,7 @@ import sys, subprocess, os, getopt
 mswindows = (sys.platform == "win32")
 
 def usage():
-  print("errorlog-extraction.py [--no-traceflag --delete-logs] -u <targetusername> -d <debugusername>")
+  print("errorlog-extraction.py [--no-traceflag --delete-logs --verbose --compress] -u <targetusername> -d <debugusername>")
 
 def main(argv):
 
@@ -14,7 +14,7 @@ def main(argv):
       sys.exit()
 
     try:
-      opts, args = getopt.getopt(sys.argv[1:],'u:d:h',['targetusername=', 'debugusername=', 'no-traceflag', 'delete-logs', 'verbose'])
+      opts, args = getopt.getopt(sys.argv[1:],'u:d:h',['targetusername=', 'debugusername=', 'no-traceflag', 'delete-logs', 'verbose', 'compress'])
     except getopt.GetoptError as err:
       print("Error: {0}".format(err))
       usage()
