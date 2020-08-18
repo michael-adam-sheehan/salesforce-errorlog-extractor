@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  web:
+    environment:
+      - CWD
+    image: sfdc-errorlog-extractor:latest
+    container_name: sfdc-errorlog-extractor
+    build:
+      context: .
+      args:
+        - TARGET_USERNAME
+        - SFDX_AUTH_URL
+    volumes:
+      - ./logs:/app/logs
+    ports:
+      - "80:80"
