@@ -157,9 +157,7 @@ class SFDCErrorLogExtractor():
         traceDebugResponse = self._client.request('PATCH', traceDebugUrl, json=body, headers={
             'Content-Type': 'application/json'})
 
-        # patching requests w/tracedebugid doesn't return results
-        # TODO: capture request and check status code and remove this conditional
-        if traceDebugResponse.status_code == requests.codes.ok:
+        if traceDebugResponse.ok:
             print(f"Debug TraceFlag set for {self.debugusername}. exiting...")
         else:
             print(f"Error unable to setup Debug TraceFlag for {self.debugusername}. Error: {traceDebugResponse} Url: {traceDebugUrl} Body: {body}")
