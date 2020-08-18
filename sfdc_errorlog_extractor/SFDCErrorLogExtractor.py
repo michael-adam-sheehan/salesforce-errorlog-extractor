@@ -11,6 +11,7 @@
 from urllib.parse import quote_plus
 import sys, subprocess, json, pytz, csv, re
 from datetime import timedelta, datetime
+from tzlocal import get_localzone
 from requests_oauthlib import OAuth2Session
 
 apiVersion = '49.0'
@@ -153,17 +154,16 @@ class SFDCErrorLogExtractor():
           body = {'StartDate': f"{startDate}",'ExpirationDate': f"{expiryDate}"}
           traceDebugUrl += f"/{traceDebugId}"
 
-        traceDebugResult = self._client.request('PATCH', traceDebugUrl, json=body, headers={
-            'Content-Type': 'application/json'}).json()
+        traceDebugResponse = self._client.request('PATCH', traceDebugUrl, json=body, headers={
+            'Content-Type': 'application/json'})
 
         # patching requests w/tracedebugid doesn't return results
         # TODO: capture request and check status code and remove this conditional
-        if not traceDebugId:
-            if 'success' in traceDebugResult:
-                print(f"Debug TraceFlag set for {self.debugusername}. exiting...")
-            else:
-                print(f"Error unable to setup Debug TraceFlag for {self.debugusername}. Error: {traceDebugResult} Url: {traceDebugUrl} Body: {body}")
-                sys.exit()
+        if traceDebugResponse.status_code == requests.codes.ok:
+            print(f"Debug TraceFlag set for {self.debugusername}. exiting...")
+        else:
+            print(f"Error unable to setup Debug TraceFlag for {self.debugusername}. Error: {traceDebugResponse} Url: {traceDebugUrl} Body: {body}")
+            sys.exit()
 
     def retrieve(self):
         print(f"Retrieving logs for {self.debugusername}...")
@@ -178,11 +178,11 @@ class SFDCErrorLogExtractor():
                 format = '%Y-%m-%dT%H:%M:%S.%f%z'
                 d = datetime.strptime(
                     result['LastModifiedDate'], format)
-                pst = pytz.timezone('America/Los_Angeles')
+                d.replace(tzinfo=get_localzone())
                 print(
-                    f"id: {result['Id']} date: {d.astimezone(pst).strftime('%Y%m%d-%H%M%S')}")
+                    f"id: {result['Id']} date: {d.strftime('%Y%m%d-%H%M%S')}")
 
-                filename = f"{d.astimezone(pst).strftime('%Y%m%d-%H%M%S')}-{result['Id']}.txt"
+                filename = f"{d.strftime('%Y%m%d-%H%M%S')}-{result['Id']}.txt"
                 with open(f"{self._logdir}/{filename}", 'w') as fh:
                     try:
                         fh.write(self.getApexLog(result['Id']))
