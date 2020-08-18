@@ -17,7 +17,7 @@ apiVersion = '49.0'
 
 class SFDCErrorLogExtractor():
 
-    def __init__(self, targetusername, debugusername, logdir, backupdir, verbose):
+    def __init__(self, targetusername, debugusername, logdir, backupdir, verbose=False):
         self.verbose = verbose
         self.targetusername = targetusername
         self.debugusername = debugusername
@@ -86,7 +86,7 @@ class SFDCErrorLogExtractor():
                 traceDebugId = result['Id']
                 
         expiryDate = (datetime.utcnow() + timedelta(minutes=30)).strftime(dateformat)
-        startDate = (datetime.utcnow()).strftime(dateformat)
+        startDate = (datetime.utcnow() + timedelta(minutes=0)).strftime(dateformat)
         # no traceflag check if debug level is defined 
         if not traceDebugId:
           print(f"No TraceDebugId found. Checking for DebugLevel: {debugLevelName}...")
@@ -150,17 +150,20 @@ class SFDCErrorLogExtractor():
         traceDebugUrl = f"{self._auth['instanceUrl']}/services/data/v{apiVersion}/tooling/sobjects/TraceFlag"
         if traceDebugId:
           print(f"TraceDebugId defined setting body to expiration date only.")
-          body = {'ExpirationDate': f"{expiryDate}"}
+          body = {'StartDate': f"{startDate}",'ExpirationDate': f"{expiryDate}"}
           traceDebugUrl += f"/{traceDebugId}"
 
         traceDebugResult = self._client.request('PATCH', traceDebugUrl, json=body, headers={
             'Content-Type': 'application/json'}).json()
 
-        if 'success' in traceDebugResult:
-          print(f"Debug TraceFlag set for {self.debugusername}. exiting...")
-        else:
-          print(f"Error unable to setup Debug TraceFlag for {self.debugusername}. Error: {traceDebugResult} Url: {traceDebugUrl} Body: {body}")
-          sys.exit()
+        # patching requests w/tracedebugid doesn't return results
+        # TODO: capture request and check status code and remove this conditional
+        if not traceDebugId:
+            if 'success' in traceDebugResult:
+                print(f"Debug TraceFlag set for {self.debugusername}. exiting...")
+            else:
+                print(f"Error unable to setup Debug TraceFlag for {self.debugusername}. Error: {traceDebugResult} Url: {traceDebugUrl} Body: {body}")
+                sys.exit()
 
     def retrieve(self):
         print(f"Retrieving logs for {self.debugusername}...")
@@ -170,7 +173,7 @@ class SFDCErrorLogExtractor():
         apexLogQueryResult = self._client.request('GET', url).json()
 
         if apexLogQueryResult['totalSize'] > 0:
-            print(f"Found {apexLogQueryResult['records']['totalSize']} logs")
+            print(f"Found {len(apexLogQueryResult['records'])} logs")
             for result in apexLogQueryResult['records']:
                 format = '%Y-%m-%dT%H:%M:%S.%f%z'
                 d = datetime.strptime(
