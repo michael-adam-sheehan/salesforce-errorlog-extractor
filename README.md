@@ -60,10 +60,14 @@ Optional Fields
 --delete-logs => removes the users' logs from the instance freeing up the log storage space
 --compress => compresses the logs into a zip format
 
+## Video of functionality
+Snippet of the program extracting the logs via a Docker container, removing them from the instance and making them available via a nginx web browser.
+
+[![Salesforce Error Log Extractor using Docker w/nginx host](media/sfdc-errorlog-extractor.gif)](https://www.youtube.com/watch?v=rQ78bRQQDq8)
+
 ## Contact
 
 Mike Sheehan- [@twitter_handle](https://twitter.com/schnelg) - michael.adam.sheehan@gmail.com
-
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
