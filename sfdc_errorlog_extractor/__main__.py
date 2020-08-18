@@ -25,6 +25,7 @@ def main(argv):
     setTraceFlag = True
     deleteLogs = False
     verbose = False
+    compress = False
 
     for opt, arg in opts:
       if opt == '-h':
@@ -40,6 +41,8 @@ def main(argv):
         deleteLogs = True
       elif opt == '--verbose':
         verbose = True 
+      elif opt == 'compress':
+        compress = True
 
     if not targetusername:
       print('Please supply a targetusername for logging into sfdc org')
@@ -68,8 +71,9 @@ def main(argv):
     if deleteLogs:
         print(f"Deleting logs for username: {debugusername}")
         ele.delete()
-        
-    #ele.compressLogs()
+    
+    if compress:    
+      ele.compressLogs()
 
 if __name__ == "__main__":
     main(sys.argv[1:])
