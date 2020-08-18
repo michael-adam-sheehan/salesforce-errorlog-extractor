@@ -80,7 +80,7 @@ Mike Sheehan- [@twitter_handle](https://twitter.com/schnelg) - michael.adam.shee
 [issues-shield]: https://img.shields.io/github/issues/michael-adam-sheehan/salesforce-errorlog-extractor.svg?style=flat-square
 [issues-url]: https://github.com/michael-adam-sheehan/salesforce-errorlog-extractor/issues
 [license-shield]: https://img.shields.io/github/license/michael-adam-sheehan/salesforce-errorlog-extractor.svg?style=flat-square
-[license-url]: https://github.com/michael-adam-sheehan/salesforce-errorlog-extractor/blob/master/LICENSE.md
+[license-url]: https://github.com/michael-adam-sheehan/salesforce-errorlog-extractor/master/LICENSE.md
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=flat-square&logo=linkedin&colorB=555
 [linkedin-url]: https://www.linkedin.com/in/michael-adam-sheehan/
 [product-screenshot]: images/screenshot.png
