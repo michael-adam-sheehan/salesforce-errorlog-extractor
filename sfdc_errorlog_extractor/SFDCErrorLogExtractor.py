@@ -149,12 +149,14 @@ class SFDCErrorLogExtractor():
           }
 
         traceDebugUrl = f"{self._auth['instanceUrl']}/services/data/v{apiVersion}/tooling/sobjects/TraceFlag"
+        method = 'POST'
         if traceDebugId:
           print(f"TraceDebugId defined setting body to expiration date only.")
           body = {'StartDate': f"{startDate}",'ExpirationDate': f"{expiryDate}"}
           traceDebugUrl += f"/{traceDebugId}"
+          method = 'PATCH'
 
-        traceDebugResponse = self._client.request('PATCH', traceDebugUrl, json=body, headers={
+        traceDebugResponse = self._client.request(method, traceDebugUrl, json=body, headers={
             'Content-Type': 'application/json'})
 
         if traceDebugResponse.ok:
